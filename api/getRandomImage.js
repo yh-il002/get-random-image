@@ -17,21 +17,27 @@ export default async function handler(req, res) {
   }
 
   try {
+    // /images/async エンドポイントは画像データが埋め込まれたHTMLフラグメントを返す
     const bingRes = await fetch(
-      `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`,
+      `https://www.bing.com/images/async?q=${encodeURIComponent(query)}&first=1&count=35&adlt=moderate&mmasync=1`,
       {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
+          "Referer": "https://www.bing.com/",
         },
       }
     );
     const html = await bingRes.text();
 
-    // Bing の HTML に埋め込まれた画像 URL を抽出
-    // 例: <a class="iusc" m='{"murl":"https://...","turl":"..."}'>
-    const imageUrls = [...html.matchAll(/"murl":"(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
+    // murl パターンを複数試みる（BingのHTML構造変化に対応）
+    let imageUrls = [...html.matchAll(/"murl":"(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
+    if (!imageUrls.length) {
+      imageUrls = [...html.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/g)].map((m) =>
+        decodeURIComponent(m[1])
+      );
+    }
 
     if (!imageUrls.length) {
       console.error("No images found. HTML head:", html.slice(0, 500));
