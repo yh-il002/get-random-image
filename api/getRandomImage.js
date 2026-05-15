@@ -12,44 +12,36 @@ export default async function handler(req, res) {
   if (!query) {
     return res.status(200).json({
       response_type: "ephemeral",
-      text: "使い方: /getimage <検索ワード>",
+      text: "使い方: /get <検索ワード>",
     });
   }
 
   try {
-    // Step 1: DuckDuckGo のページから vqd トークンを取得
-    const ddgPage = await fetch(
-      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
+    const bingRes = await fetch(
+      `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`,
       {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
         },
       }
     );
-    const html = await ddgPage.text();
-    const vqdMatch = html.match(/vqd=["']?([\d-]+)/);
-    if (!vqdMatch) throw new Error("vqd token not found");
+    const html = await bingRes.text();
 
-    // Step 2: 画像検索結果を取得
-    const imgRes = await fetch(
-      `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&vqd=${vqdMatch[1]}&p=1`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Referer: "https://duckduckgo.com/",
-        },
-      }
-    );
-    const { results } = await imgRes.json();
+    // Bing の HTML に埋め込まれた画像 URL を抽出
+    // 例: <a class="iusc" m='{"murl":"https://...","turl":"..."}'>
+    const imageUrls = [...html.matchAll(/"murl":"(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
 
-    if (!results?.length) {
+    if (!imageUrls.length) {
+      console.error("No images found. HTML head:", html.slice(0, 500));
       return res.status(200).json({
         response_type: "ephemeral",
         text: `「${query}」の画像が見つかりませんでした。`,
       });
     }
 
-    const item = results[Math.floor(Math.random() * Math.min(results.length, 20))];
+    const imageUrl = imageUrls[Math.floor(Math.random() * Math.min(imageUrls.length, 20))];
 
     return res.status(200).json({
       response_type: "in_channel",
@@ -60,8 +52,8 @@ export default async function handler(req, res) {
         },
         {
           type: "image",
-          image_url: item.image,
-          alt_text: item.title || query,
+          image_url: imageUrl,
+          alt_text: query,
         },
       ],
     });
